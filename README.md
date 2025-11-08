@@ -21,7 +21,7 @@ Windows: `f1`
 Mac: `Shift` + `Command` + `P`
 
 
-1. Run Dev Containers: Open Folder in Container... from the Command Palette and select .devcontainer/cpu or .devcontainer/gpu (selects the type of hardware you are looking to use for ML)
+1. Run Dev Containers: Open Folder in Container... from the Command Palette and .devcontainer
 
 2. VS Code will then start up the container and connect this window to it
 
