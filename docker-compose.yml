@@ -1,3 +1,4 @@
+
 services:
   dev:
       build:
@@ -8,7 +9,15 @@ services:
         - CUDA_VISIBLE_DEVICES=0
         - RAY_memory_monitor_refresh_ms=0  # avoids false OOM warnings
       shm_size: "8g"    # helpful for PyTorch/ORT buffers
-      gpus: all
+      ### doesnt work in MacOS, CPU only?
+      # deploy:
+      #   resources:
+      #     reservations:
+      #       devices:
+      #         - driver: nvidia
+      #           count: all
+      #           capabilities: [gpu]
+
       restart: unless-stopped
       volumes:
         - .:/app
