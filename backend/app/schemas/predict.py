@@ -5,7 +5,7 @@ from ..models.models import ModelName
 class PredictRequest(BaseModel):
     """Input volume as flattened list plus shape + model selection."""
     volume: list[float]
-    shape: list[int]  # [C, D, H, W] or [1, 128, 128, 128]
+    shape: list[int]  # [B, C, H, W, D] or [1, 4, 128, 128, 155]
     # model_name: Literal["dev_model", "unetr"] = "dev_model"
     model_name: ModelName  = ModelName.DEV_MODEL
 

@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from ray import serve
 import torch
 
-from backend.app.schemas.predict import PredictRequest, PredictResponse
+from app.schemas.predict import PredictRequest, PredictResponse
 from app.services.inference import run_inference
 from app.models.models import MODEL_REGISTRY, ModelName, build_model_from_name
 import torch.nn as nn
@@ -15,7 +15,7 @@ import torch.nn as nn
 model_app = FastAPI(title="Model API")
 
 @serve.deployment(
-    route_prefix="/model",        # e.g. http://host:8000/model/api/predict
+    # route_prefix="/model",        # e.g. http://host:8000/model/api/predict
     ray_actor_options={"num_gpus": 1}) # or 0 for CPU
 @serve.ingress(model_app)
 class ModelService:
@@ -52,3 +52,5 @@ class ModelService:
 
 # Object used by `serve run`
 model_app_deployment = ModelService.bind()
+
+# serve run serve_model:model_app_deployment --name model --route-prefix /model

@@ -51,7 +51,7 @@ def build_densenet121(device: torch.device) -> nn.Module:
         spatial_dims=3,
         in_channels=1,
         out_channels=4,
-        pretrained=True,
+        pretrained=False,
     ).to(device)
     model.eval()
     return model

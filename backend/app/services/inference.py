@@ -7,11 +7,11 @@ from ..schemas.predict import PredictRequest, PredictResponse
 def run_inference(model: torch.nn.Module, device: torch.device, payload: PredictRequest) -> PredictResponse:
     """Shared inference logic: used by both uvicorn and Ray Serve."""
     vol_np = np.array(payload.volume, dtype=np.float32).reshape(payload.shape)
-    image = torch.from_numpy(vol_np).unsqueeze(0).to(device)  # [1, C, D, H, W]
+    image = torch.from_numpy(vol_np).unsqueeze(0).to(device)  # [1, C, H, W, D]
 
     with torch.no_grad():
-        logits = model(image)              # [1, C, D, H, W]
-        pred = torch.argmax(logits, dim=1) # [1, D, H, W]
+        logits = model(image)              # [1, C, H, W, D]
+        pred = torch.argmax(logits, dim=1) # [1, H, W, D]
 
     seg = pred.squeeze(0).cpu().numpy()
 

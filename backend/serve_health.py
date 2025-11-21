@@ -10,7 +10,7 @@ health_app = FastAPI(title="Health API")
 health_app.include_router(health_router, prefix="/api/health")
 
 @serve.deployment(
-    route_prefix="/",             # e.g. http://host:8000/api/health
+    # route_prefix="/",             # e.g. http://host:8000/api/health
     ray_actor_options={"num_gpus": 0}
 )
 @serve.ingress(health_app)
@@ -22,3 +22,8 @@ class HealthService:
 
 # Object used by `serve run`
 health_app_deployment = HealthService.bind()
+
+
+# to run ray serve run below (only need to run ray start ... one)
+# ray start --head --dashboard-host=127.0.0.1
+# serve run serve_health:health_app_deployment --name health --route-prefix /
