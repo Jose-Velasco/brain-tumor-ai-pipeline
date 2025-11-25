@@ -2,6 +2,7 @@ from typing import Callable
 import torch
 import torch.nn as nn
 from monai.networks.nets.densenet import DenseNet121
+from monai.networks.nets.unet import UNet
 from enum import StrEnum, auto
 
 class ModelName(StrEnum):
@@ -42,16 +43,19 @@ def register_model(name: ModelName):
     return decorator
 
 @register_model(ModelName.DEV_MODEL)
-def build_densenet121(device: torch.device) -> nn.Module:
+def build_small_unet(device: torch.device) -> nn.Module:
     """
-    Small 3D DenseNet with pretrained weights.
-    Great for fast dev and testing.
+    Small 3D UNet for dev/testing segmentation pipeline.
+    Input:  [B, 4, H, W, D]
+    Output: [B, 4, H, W, D] logits
     """
-    model = DenseNet121(
+    model = UNet(
         spatial_dims=3,
-        in_channels=1,
-        out_channels=4,
-        pretrained=False,
+        in_channels=4,      # 4 MRI modalities
+        out_channels=4,     # 4 tumor/background classes
+        channels=(16, 32, 64),  # small, for speed
+        strides=(2, 2),
+        num_res_units=1,
     ).to(device)
     model.eval()
     return model

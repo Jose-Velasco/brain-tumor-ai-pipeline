@@ -21,3 +21,21 @@ services:
       volumes:
         - .:/app
       command: sleep infinity
+  
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama   # cache models here
+    # GPU acceleration (NVIDIA)
+    runtime: nvidia # for older Docker setups
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+
+volumes:
+  ollama-models:
