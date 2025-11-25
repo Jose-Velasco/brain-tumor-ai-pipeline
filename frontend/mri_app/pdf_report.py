@@ -3,6 +3,7 @@ from typing import Any
 from scipy.ndimage import center_of_mass
 import matplotlib.pyplot as plt
 from io import BytesIO
+import base64
 
 # from earlier: compute_intensity_stats, compute_tumor_stats, compute_bbox_and_com, render_slice_overlays, create_pdf_report
 # MODALITY_NAMES = ["FLAIR", "T1", "T1ce", "T2"] 
@@ -10,25 +11,25 @@ MODALITY_NAMES = ["FLAIR", "T1w", "t1gd", "T2w"]
 
 # Map label ids to names used in your label mask
 LABEL_MAP = {
-    "0": "background", 
-    "1": "edema",
-    "2": "non-enhancing tumor",
-    "3": "enhancing tumour"
+    0: "background", 
+    1: "edema",
+    2: "non-enhancing tumor",
+    3: "enhancing tumour"
 }
 
 def compute_intensity_stats(image: np.ndarray):
     """
-    image: [C, D, H, W]
+    image: [C, H, W, D]
     Returns dict[modality_name] -> stats.
     """
     C = image.shape[0]
-    stats = {}
+    stats: dict[str, dict] = {}
 
     for c in range(C):
         name = MODALITY_NAMES[c] if c < len(MODALITY_NAMES) else f"channel_{c}"
-        x = image[c].astype(np.float32)
+        x = image[c].astype(np.float32)  # [H, W, D]
 
-        x_nonzero = x[x != 0]  # avoid huge background skew
+        x_nonzero = x[x != 0]  # avoid background skew
         if x_nonzero.size == 0:
             stats[name] = {
                 "min": None,
@@ -56,9 +57,9 @@ def compute_voxel_volume_ml(spacing):
 
 def compute_tumor_stats(label: np.ndarray, spacing, brain_mask: np.ndarray | None = None):
     """
-    label: [D, H, W] int
+    label: [H, W, D] int
     spacing: (sx, sy, sz) in mm
-    brain_mask: optional [D,H,W] bool/int; if None, use label>0 or nonzero image
+    brain_mask: optional [H, W, D] bool/int; if None, use label > 0
     """
     if brain_mask is None:
         brain_mask = label > 0
@@ -96,10 +97,14 @@ def compute_tumor_stats(label: np.ndarray, spacing, brain_mask: np.ndarray | Non
 
 def compute_bbox_and_com(label: np.ndarray):
     """
-    label: [D, H, W]
-    Returns: dict[class_name] -> { bbox: [z_min,z_max,y_min,y_max,x_min,x_max], center_of_mass_vox: [z,y,x] }
+    label: [H, W, D]
+    Returns: dict[class_name] -> {
+        present: bool,
+        bbox: [z_min,z_max,y_min,y_max,x_min,x_max],
+        center_of_mass_vox: [z,y,x]
+    }
     """
-    results = {}
+    results: dict[str, dict] = {}
 
     for cls_id, cls_name in LABEL_MAP.items():
         mask = label == cls_id
@@ -111,18 +116,16 @@ def compute_bbox_and_com(label: np.ndarray):
             }
             continue
 
-        # bounding box
-        coords = np.argwhere(mask)  # [N, 3] with (z,y,x)
-        zmin, ymin, xmin = coords.min(axis=0)
-        zmax, ymax, xmax = coords.max(axis=0)
+        coords = np.argwhere(mask)  # [N, 3] with (y, x, z)
+        ymin, xmin, zmin = coords.min(axis=0)
+        ymax, xmax, zmax = coords.max(axis=0)
 
-        # center of mass in voxel coordinates
-        com = center_of_mass(mask.astype(np.float32))  # (z,y,x) as floats
+        com_y, com_x, com_z = center_of_mass(mask.astype(np.float32))  # (y, x, z)
 
         results[cls_name] = {
             "present": True,
             "bbox": [int(zmin), int(zmax), int(ymin), int(ymax), int(xmin), int(xmax)],
-            "center_of_mass_vox": [float(com[0]), float(com[1]), float(com[2])],
+            "center_of_mass_vox": [float(com_z), float(com_y), float(com_x)],
         }
 
     return results
@@ -145,26 +148,39 @@ def _make_overlay(base: np.ndarray, mask: np.ndarray, alpha: float = 0.4) -> np.
     overlay[tumor, 2] *= (1.0 - alpha)
     return overlay
 
+
 def render_slice_overlays(
     image: np.ndarray,
     mask: np.ndarray,
     modality_idx: int = 0,
 ) -> dict[str, bytes]:
     """
-    image: [C,D,H,W], mask: [D,H,W]
+    image: [C, H, W, D], mask: [H, W, D]
     Returns dict: view_name -> PNG bytes (axial, coronal, sagittal).
     """
-    vol = image[modality_idx]  # [D,H,W]
-    D, H, W = vol.shape
+    vol = image[modality_idx]  # [H, W, D]
+    H, W, D = vol.shape
 
-    axial_idx = D // 2
-    coronal_idx = H // 2
+    axial_idx    = D // 2
+    coronal_idx  = H // 2
     sagittal_idx = W // 2
 
     slices = {
-        "axial_mid":   (vol[axial_idx],   mask[axial_idx]),
-        "coronal_mid": (vol[:, coronal_idx, :], mask[:, coronal_idx, :]),
-        "sagittal_mid":(vol[:, :, sagittal_idx], mask[:, :, sagittal_idx]),
+        # Axial: plane perpendicular to z (depth), shape [H,W]
+        "axial_mid": (
+            vol[:, :, axial_idx],
+            mask[:, :, axial_idx],
+        ),
+        # Coronal: plane perpendicular to y, shape [W,D] (still 2D)
+        "coronal_mid": (
+            vol[coronal_idx, :, :],
+            mask[coronal_idx, :, :],
+        ),
+        # Sagittal: plane perpendicular to x, shape [H,D]
+        "sagittal_mid": (
+            vol[:, sagittal_idx, :],
+            mask[:, sagittal_idx, :],
+        ),
     }
 
     png_dict: dict[str, bytes] = {}
@@ -172,7 +188,7 @@ def render_slice_overlays(
         img_norm = _normalize_slice(img_slice)
         overlay = _make_overlay(img_norm, mask_slice)
 
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(4, 4))
         ax.imshow(overlay)
         ax.set_title(name.replace("_", " ").title())
         ax.axis("off")
@@ -184,6 +200,9 @@ def render_slice_overlays(
         png_dict[name] = buf.getvalue()
 
     return png_dict
+
+def png_bytes_to_base64(png_bytes: bytes) -> str:
+    return base64.b64encode(png_bytes).decode("utf-8")
 
 def build_case_report(case_id: str, image: np.ndarray, mask: np.ndarray, spacing: tuple[float, float, float]) -> dict[str, Any]:
     """Builds the JSON-like case_report consumed by the LLM and used in the PDF."""

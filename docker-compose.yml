@@ -8,34 +8,22 @@ services:
         - CUDA_VISIBLE_DEVICES=0
         - RAY_memory_monitor_refresh_ms=0  # avoids false OOM warnings
       shm_size: "8g"    # helpful for PyTorch/ORT buffers
-      ### doesnt work in MacOS, CPU only?
-      # deploy:
-      #   resources:
-      #     reservations:
-      #       devices:
-      #         - driver: nvidia
-      #           count: all
-      #           capabilities: [gpu]
-
+      gpus: all
       restart: unless-stopped
       volumes:
         - .:/app
       command: sleep infinity
   
   ollama:
-    image: ollama/ollama:latest
+    build:
+      context: ./ollama
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "11434:11434"
     volumes:
       - ollama-models:/root/.ollama   # cache models here
-    # GPU acceleration (NVIDIA)
-    runtime: nvidia # for older Docker setups
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: ["gpu"]
+    gpus: all
 
 volumes:
   ollama-models:

@@ -4,7 +4,7 @@ import streamlit as st
 from mri_app.visualization import make_overlay_figure
 from mri_app.backend_client import run_segmentation, generate_llm_report
 from mri_app.io import load_nifti_uploaded
-from mri_app.pdf_report import build_case_report, render_slice_overlays, create_pdf_report
+from mri_app.pdf_report import build_case_report, render_slice_overlays
 
 # add models here based on the ones setup in backend/models/models.py
 class ModelName(StrEnum):
@@ -19,7 +19,6 @@ if uploaded is not None:
     image, spacing, case_id = load_nifti_uploaded(uploaded)  # [C, H, W, D]
     st.success(f"Loaded case {case_id} with shape {image.shape}")
 
-    # model_name = st.selectbox("Model", ["dev_model"], index=0)
     model_name = st.selectbox("Model", [model_names.value for model_names in ModelName], index=0)
 
     if st.button("Run Segmentation"):
@@ -49,23 +48,18 @@ if "image" in st.session_state and "mask" in st.session_state:
     if st.button("Generate LLM Report"):
         with st.spinner("Asking Gemma (via Ollama)..."):
             case_report: dict[str, Any] = build_case_report(case_id, image, mask, spacing)
-            llm_text = generate_llm_report(case_report)
+            report_images = render_slice_overlays(image, mask, modality_idx)
+            llm_text = generate_llm_report(case_report, list(report_images.values()))
+            st.session_state["report_images"] = report_images
             st.session_state["llm_text"] = llm_text
         st.success("Report generated.")
     
     if "llm_text" in st.session_state:
         st.subheader("LLM Narrative Report")
         st.write(st.session_state["llm_text"])
-
-        # # PDF generation
-        # slice_images = render_slice_overlays(image, mask)  # dict[name] -> png bytes
-        # pdf_bytes = create_pdf_report(case_report, slice_images, st.session_state["llm_text"])
-
-        # st.download_button(
-        #     "Download PDF report",
-        #     data=pdf_bytes,
-        #     file_name=f"{case_id}_report.pdf",
-        #     mime="application/pdf",
-        # )
+        if "report_images" in st.session_state:
+            cols = st.columns(3)
+            for col, (name, png) in zip(cols, st.session_state["report_images"].items()):
+                col.image(png, caption=name, use_container_width=True)
 
 # streamlit run app.py --logger.level=debug
