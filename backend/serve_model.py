@@ -9,15 +9,14 @@ import torch
 from app.schemas.predict import PredictRequest, PredictResponse
 from app.services.inference import prepare_model_inference_response, prepare_payload_for_inference, run_inference
 from app.models.models import MODEL_REGISTRY, ModelName, build_model_from_name
-import torch.nn as nn
 
 from app.models.image_transformations import get_standard_student_teacher_transform
 
 # FastAPI app for model endpoints only
 model_app = FastAPI(title="Model API")
 
+# e.g. http://host:8000/model/api/predict
 @serve.deployment(
-    # route_prefix="/model",        # e.g. http://host:8000/model/api/predict
     ray_actor_options={"num_gpus": 1}) # or 0 for CPU
 @serve.ingress(model_app)
 class ModelService:
