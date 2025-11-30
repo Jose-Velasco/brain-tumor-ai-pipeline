@@ -7,6 +7,7 @@ services:
         - MLFLOW_TRACKING_URI=http://mlflow:5000
         - CUDA_VISIBLE_DEVICES=0
         - RAY_memory_monitor_refresh_ms=0  # avoids false OOM warnings
+        - MODEL_ROOT_DIR=/app/app/models/artifacts
       shm_size: "8g"    # helpful for PyTorch/ORT buffers
       gpus: all
       restart: unless-stopped
