@@ -1,12 +1,16 @@
 from typing import Callable, Protocol
 import torch
-# from monai.networks.nets.unet import UNet
+from monai.networks.nets.unet import UNet
+from monai.networks.nets.segresnet import SegResNet
 from enum import StrEnum, auto
-from app.models.onnx_runtime import OnnxSegmentationModel
+from app.models.inference_runtime import OnnxSegmentationModel, TorchSegmentationModel
 from ..core.config import settings
 
+# TODO: make this share between frontend and back. for now add model here and in frontend too
 class ModelName(StrEnum):
     DEV_MODEL = auto()
+    SEGRESNET_TEACHER_TRAINED = auto()
+    UNET_STUDENT_TRAINED = auto()
 
 class InferenceFn(Protocol):
     def __call__(self, x: torch.Tensor) -> torch.Tensor: 
@@ -45,24 +49,6 @@ def register_model(name: ModelName):
         return fn
     return decorator
 
-# @register_model(ModelName.DEV_MODEL)
-# def build_small_unet(device: torch.device) -> nn.Module:
-#     """
-#     Small 3D UNet for dev/testing segmentation pipeline.
-#     Input:  [B, 4, H, W, D]
-#     Output: [B, 4, H, W, D] logits
-#     """
-#     model = UNet(
-#         spatial_dims=3,
-#         in_channels=4,      # 4 MRI modalities
-#         out_channels=4,     # 4 tumor/background classes
-#         channels=(16, 32, 64),  # small, for speed
-#         strides=(2, 2),
-#         num_res_units=1,
-#     ).to(device)
-#     model.eval()
-#     return model
-
 @register_model(ModelName.DEV_MODEL)
 def build_small_unet(device: torch.device) -> InferenceFn:
     """
@@ -75,3 +61,51 @@ def build_small_unet(device: torch.device) -> InferenceFn:
     return OnnxSegmentationModel(model_path, use_cuda=device.type == "cuda")
 
 # add more models here
+
+@register_model(ModelName.SEGRESNET_TEACHER_TRAINED)
+def build_segresnet_trained(device: torch.device) -> InferenceFn:
+    """
+    segresnet_trained for dev/testing segmentation pipeline.
+
+    Input:  [B, 4, H, W, D]
+
+    Output: [B, 4, H, W, D] logits
+    """
+    model_dir = settings.model_root_dir / "segresnet"
+    model_weight_path = model_dir / "teacher17.pth"
+    teacher_trained = SegResNet(
+        blocks_down=(1, 2, 2, 4),
+        blocks_up=(1, 1, 1),
+        init_filters=16,
+        in_channels=4,
+        out_channels=4,
+        dropout_prob=0.2,
+    ).to(device)
+
+    teacher_trained.load_state_dict(torch.load(model_weight_path, map_location=device))
+    teacher_trained.eval()
+    return TorchSegmentationModel(teacher_trained)
+
+@register_model(ModelName.UNET_STUDENT_TRAINED)
+def build_unet_trained(device: torch.device) -> InferenceFn:
+    """
+    segresnet_trained for dev/testing segmentation pipeline.
+
+    Input:  [B, 4, H, W, D]
+
+    Output: [B, 4, H, W, D] logits
+    """
+    model_dir = settings.model_root_dir / "unet"
+    model_weight_path = model_dir / "student_trained_teacher17.pth"
+    student = UNet(
+        spatial_dims=3,
+        in_channels=4,
+        out_channels=4,
+        channels=(16, 32, 64, 128),
+        strides=(2,2,2),
+        num_res_units=1,
+    ).to(device)
+
+    student.load_state_dict(torch.load(model_weight_path, map_location=device))
+    student.eval()
+    return TorchSegmentationModel(student)

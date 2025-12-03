@@ -30,6 +30,7 @@ class ModelService:
 
     @model_app.post("/api/predict", response_model=PredictResponse)
     async def predict(self, payload: PredictRequest) -> PredictResponse:
+        print(f"{payload.shape}")
         model_name = payload.model_name
 
         if model_name not in self.models:

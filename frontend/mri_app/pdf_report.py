@@ -59,12 +59,14 @@ def compute_tumor_stats(label: np.ndarray, spacing, brain_mask: np.ndarray | Non
     """
     label: [H, W, D] int
     spacing: (sx, sy, sz) in mm
-    brain_mask: optional [H, W, D] bool/int; if None, use label > 0
+    brain_mask: optional [H, W, D] bool/int; if None, caller should pass a real brain mask.
     """
-    if brain_mask is None:
-        brain_mask = label > 0
-
     voxel_volume_ml = compute_voxel_volume_ml(spacing)
+
+    if brain_mask is None:
+        # Fallback: treat non-background as "brain region".
+        # Better: pass an explicit brain mask from the image (see below).
+        brain_mask = label > 0
 
     brain_voxels = int(brain_mask.sum())
     brain_volume_ml = brain_voxels * voxel_volume_ml
@@ -75,12 +77,16 @@ def compute_tumor_stats(label: np.ndarray, spacing, brain_mask: np.ndarray | Non
     for cls_id, cls_name in LABEL_MAP.items():
         cls_mask = label == cls_id
         n_voxels = int(cls_mask.sum())
-        total_tumor_voxels += n_voxels
 
+        # always store class stats
         class_stats[cls_name] = {
             "voxel_count": n_voxels,
             "volume_ml": n_voxels * voxel_volume_ml,
         }
+
+        # BUT: only add non-background to tumor total
+        if cls_id != 0:
+            total_tumor_voxels += n_voxels
 
     total_tumor_volume_ml = total_tumor_voxels * voxel_volume_ml
     percent_brain_affected = (
@@ -208,7 +214,12 @@ def build_case_report(case_id: str, image: np.ndarray, mask: np.ndarray, spacing
     """Builds the JSON-like case_report consumed by the LLM and used in the PDF."""
     # use your earlier helper functions
     intensity_stats = compute_intensity_stats(image)
-    tumor_stats = compute_tumor_stats(mask, spacing)
+
+    # Approximate brain mask: any voxel where at least one modality is non-zero
+    # image: [C, H, W, D] -> [H, W, D]
+    brain_mask = np.any(image != 0, axis=0)
+    tumor_stats = compute_tumor_stats(mask, spacing, brain_mask=brain_mask)
+    
     geometry = compute_bbox_and_com(mask)
 
     return {
