@@ -1,9 +1,8 @@
-# settings, env varsfrom pydantic_settings import BaseSettings
 from pydantic_settings import BaseSettings
+from pathlib import Path
 
 class Settings(BaseSettings):
-    # Path to BasicUNet student model checkpoint (update to your real path)
-    # UNETR_CHECKPOINT: str = "/models/unetr.ckpt"
+    model_root_dir: Path = Path("/app/backend/app/models/artifacts")
 
     class Config:
         env_file = ".env"

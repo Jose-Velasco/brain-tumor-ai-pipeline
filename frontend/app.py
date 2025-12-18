@@ -9,6 +9,8 @@ from mri_app.pdf_report import build_case_report, render_slice_overlays
 # add models here based on the ones setup in backend/models/models.py
 class ModelName(StrEnum):
     DEV_MODEL = auto()
+    SEGRESNET_TEACHER_TRAINED = auto()
+    UNET_STUDENT_TRAINED = auto()
 
 st.set_page_config(page_title="Brain Tumor Segmentation", layout="wide")
 st.title("Brain Tumor Segmentation Demo")
